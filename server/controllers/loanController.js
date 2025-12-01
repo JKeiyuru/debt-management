@@ -1,0 +1,392 @@
+const Loan = require('../models/Loan');
+const Customer = require('../models/Customer');
+const { createAuditLog } = require('../utils/auditLogger');
+const { generateRepaymentSchedule, calculateTotalInterest, updateDelinquencyStatus } = require('../utils/loanCalculator');
+
+// Generate unique loan number
+const generateLoanNumber = async () => {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  
+  const count = await Loan.countDocuments();
+  const sequence = (count + 1).toString().padStart(5, '0');
+  
+  return `LN${year}${month}${sequence}`;
+};
+
+// @desc    Create new loan
+// @route   POST /api/loans
+// @access  Private
+exports.createLoan = async (req, res) => {
+  try {
+    const loanNumber = await generateLoanNumber();
+    
+    // Generate repayment schedule
+    const schedule = generateRepaymentSchedule({
+      principal: req.body.principal,
+      interestRate: req.body.interestRate,
+      interestType: req.body.interestType,
+      term: req.body.term,
+      repaymentFrequency: req.body.repaymentFrequency,
+      amortizationMethod: req.body.amortizationMethod,
+      startDate: req.body.disbursementDate || new Date(),
+      gracePeriod: req.body.gracePeriod || 0
+    });
+
+    // Calculate totals
+    const totalInterest = schedule.reduce((sum, item) => sum + item.interestDue, 0);
+    const totalAmount = req.body.principal + totalInterest;
+
+    const loanData = {
+      ...req.body,
+      loanNumber,
+      repaymentSchedule: schedule,
+      totalInterest,
+      totalAmount,
+      balances: {
+        principalBalance: req.body.principal,
+        interestBalance: totalInterest,
+        feesBalance: req.body.totalFees || 0,
+        penaltyBalance: 0,
+        totalBalance: totalAmount + (req.body.totalFees || 0)
+      },
+      loanOfficer: req.body.loanOfficer || req.user.id,
+      createdBy: req.user.id
+    };
+
+    const loan = await Loan.create(loanData);
+
+    // Update customer credit info
+    await Customer.findByIdAndUpdate(req.body.customer, {
+      $inc: { 'creditInfo.activeLoans': 1 }
+    });
+
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'LOAN_CREATED',
+      entity: 'Loan',
+      entityId: loan._id,
+      details: `Loan created: ${loan.loanNumber}`
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Loan created successfully',
+      data: { loan }
+    });
+  } catch (error) {
+    console.error('Create loan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating loan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get all loans
+// @route   GET /api/loans
+// @access  Private
+exports.getAllLoans = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      customer,
+      search,
+      sortBy = '-createdAt'
+    } = req.query;
+
+    const query = {};
+
+    if (status) query.status = status;
+    if (customer) query.customer = customer;
+    if (search) {
+      query.$or = [
+        { loanNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const loans = await Loan.find(query)
+      .populate('customer', 'personalInfo contactInfo creditInfo')
+      .populate('loanOfficer', 'fullName email')
+      .populate('createdBy', 'fullName')
+      .sort(sortBy)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Loan.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: loans.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      data: { loans }
+    });
+  } catch (error) {
+    console.error('Get loans error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching loans',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get single loan
+// @route   GET /api/loans/:id
+// @access  Private
+exports.getLoan = async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id)
+      .populate('customer')
+      .populate('loanOfficer', 'fullName email phone')
+      .populate('createdBy', 'fullName email')
+      .populate('lastModifiedBy', 'fullName')
+      .populate('approvals.approvedBy', 'fullName')
+      .populate('notes.createdBy', 'fullName');
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { loan }
+    });
+  } catch (error) {
+    console.error('Get loan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching loan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Update loan
+// @route   PUT /api/loans/:id
+// @access  Private
+exports.updateLoan = async (req, res) => {
+  try {
+    let loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found'
+      });
+    }
+
+    if (loan.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update loan that is not in pending status'
+      });
+    }
+
+    loan = await Loan.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...req.body,
+        lastModifiedBy: req.user.id
+      },
+      { new: true, runValidators: true }
+    );
+
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'LOAN_UPDATED',
+      entity: 'Loan',
+      entityId: loan._id,
+      details: `Loan updated: ${loan.loanNumber}`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Loan updated successfully',
+      data: { loan }
+    });
+  } catch (error) {
+    console.error('Update loan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating loan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Approve loan
+// @route   POST /api/loans/:id/approve
+// @access  Private
+exports.approveLoan = async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found'
+      });
+    }
+
+    if (loan.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending loans can be approved'
+      });
+    }
+
+    loan.status = 'approved';
+    loan.approvalDate = new Date();
+    loan.approvals.push({
+      approvedBy: req.user.id,
+      status: 'approved',
+      comments: req.body.comments,
+      date: new Date()
+    });
+
+    await loan.save();
+
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'LOAN_APPROVED',
+      entity: 'Loan',
+      entityId: loan._id,
+      details: `Loan approved: ${loan.loanNumber}`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Loan approved successfully',
+      data: { loan }
+    });
+  } catch (error) {
+    console.error('Approve loan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error approving loan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Disburse loan
+// @route   POST /api/loans/:id/disburse
+// @access  Private
+exports.disburseLoan = async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found'
+      });
+    }
+
+    if (loan.status !== 'approved') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only approved loans can be disbursed'
+      });
+    }
+
+    loan.status = 'disbursed';
+    loan.disbursementDate = new Date();
+    loan.disbursement = {
+      amount: req.body.amount || loan.principal,
+      date: new Date(),
+      method: req.body.method,
+      reference: req.body.reference,
+      disbursedBy: req.user.id
+    };
+
+    // Calculate maturity date
+    if (loan.term.unit === 'months') {
+      loan.maturityDate = new Date();
+      loan.maturityDate.setMonth(loan.maturityDate.getMonth() + loan.term.value);
+    }
+
+    await loan.save();
+
+    // Update customer credit info
+    await Customer.findByIdAndUpdate(loan.customer, {
+      $inc: { 
+        'creditInfo.totalBorrowed': loan.principal
+      }
+    });
+
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'LOAN_DISBURSED',
+      entity: 'Loan',
+      entityId: loan._id,
+      details: `Loan disbursed: ${loan.loanNumber}`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Loan disbursed successfully',
+      data: { loan }
+    });
+  } catch (error) {
+    console.error('Disburse loan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error disbursing loan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get loan statistics
+// @route   GET /api/loans/stats
+// @access  Private
+exports.getLoanStats = async (req, res) => {
+  try {
+    const totalLoans = await Loan.countDocuments();
+    const activeLoans = await Loan.countDocuments({ status: { $in: ['disbursed', 'active'] } });
+    const pendingLoans = await Loan.countDocuments({ status: 'pending' });
+    const defaultedLoans = await Loan.countDocuments({ status: 'defaulted' });
+
+    const portfolioValue = await Loan.aggregate([
+      { $match: { status: { $in: ['disbursed', 'active'] } } },
+      { $group: { _id: null, total: { $sum: '$balances.totalBalance' } } }
+    ]);
+
+    const totalDisbursed = await Loan.aggregate([
+      { $match: { status: { $nin: ['pending', 'rejected'] } } },
+      { $group: { _id: null, total: { $sum: '$principal' } } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalLoans,
+        activeLoans,
+        pendingLoans,
+        defaultedLoans,
+        portfolioValue: portfolioValue[0]?.total || 0,
+        totalDisbursed: totalDisbursed[0]?.total || 0
+      }
+    });
+  } catch (error) {
+    console.error('Get loan stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching loan statistics',
+      error: error.message
+    });
+  }
+};
