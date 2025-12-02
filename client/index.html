@@ -1,13 +1,56 @@
+<!-- client/index.html - UPDATED WITH PWA SUPPORT -->
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xmljpg" href="/favicon1.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DMS</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="Professional Debt Management System for tracking loans, payments, and customers" />
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DebtMS" />
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    <meta name="msapplication-TileImage" content="/icons/android-launchericon-144-144.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/icons/web-app-manifest-192x192.png" />
+    
+    <title>DebtMS - Debt Management System</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/service-worker.js')
+            .then(registration => {
+              console.log('✅ Service Worker registered:', registration);
+              
+              // Check for updates every hour
+              setInterval(() => {
+                registration.update();
+              }, 60 * 60 * 1000);
+            })
+            .catch(err => {
+              console.error('❌ Service Worker registration failed:', err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
