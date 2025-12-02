@@ -1,19 +1,23 @@
-// client/src/pages/Settings.jsx - COMPLETE SETTINGS PAGE
-// ============================================
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Switch } from '../components/ui/switch';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../components/ui/use-toast';
-import { User, Lock, Bell, Settings as SettingsIcon, Save } from 'lucide-react';
+import { User, Lock, Bell, Settings as SettingsIcon, Save, Eye, EyeOff } from 'lucide-react';
 
 const Settings = () => {
   const { user, updateProfile, changePassword } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [profileData, setProfileData] = useState({
     fullName: user?.fullName || '',
@@ -27,6 +31,16 @@ const Settings = () => {
     confirmPassword: ''
   });
 
+  // Notification preferences
+  const [notifications, setNotifications] = useState({
+    paymentReminders: true,
+    overdueAlerts: true,
+    loanApprovals: true,
+    systemUpdates: false,
+    emailNotifications: true,
+    pushNotifications: false
+  });
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -35,7 +49,7 @@ const Settings = () => {
     
     if (result.success) {
       toast({
-        title: 'Success',
+        title: 'Success! 🎉',
         description: 'Profile updated successfully'
       });
     } else {
@@ -54,8 +68,17 @@ const Settings = () => {
     
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast({
-        title: 'Error',
+        title: 'Oops! 🙈',
         description: 'Passwords do not match',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: 'Too Short! 📏',
+        description: 'Password must be at least 6 characters',
         variant: 'destructive'
       });
       return;
@@ -67,10 +90,13 @@ const Settings = () => {
     
     if (result.success) {
       toast({
-        title: 'Success',
+        title: 'Success! 🔐',
         description: 'Password changed successfully'
       });
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     } else {
       toast({
         title: 'Error',
@@ -80,6 +106,17 @@ const Settings = () => {
     }
     
     setLoading(false);
+  };
+
+  const handleNotificationToggle = (key) => {
+    setNotifications(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+    toast({
+      title: 'Updated! ✅',
+      description: `Notification preferences saved`
+    });
   };
 
   return (
@@ -185,32 +222,98 @@ const Settings = () => {
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
                   <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="currentPassword"
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={passwordData.currentPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                      title={showCurrentPassword ? "🙈 Hide password (trust me, it's safer)" : "👀 Peek at password (I won't tell anyone)"}
+                    >
+                      {showCurrentPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {showCurrentPassword && (
+                    <p className="text-xs text-orange-500 mt-1">
+                      🕵️ Snooping around, are we? Make sure nobody's watching! 
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="newPassword"
+                      type={showNewPassword ? "text" : "password"}
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                      title={showNewPassword ? "🙈 Hide it!" : "👁️ Reveal the secret"}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {showNewPassword && passwordData.newPassword && (
+                    <p className="text-xs text-blue-500 mt-1">
+                      {passwordData.newPassword.length < 6 
+                        ? "🤔 Hmm, that's a bit short. Go longer!" 
+                        : passwordData.newPassword.length < 8
+                        ? "👌 Not bad, but you can do better!"
+                        : "💪 Now that's a strong password!"}
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                      title={showConfirmPassword ? "🙈 Hide confirmation" : "👁️ Double check"}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {showConfirmPassword && passwordData.confirmPassword && (
+                    <p className="text-xs text-green-500 mt-1">
+                      {passwordData.newPassword === passwordData.confirmPassword
+                        ? "✅ Perfect match! You're good to go!"
+                        : "❌ Oops! These don't match. Try again!"}
+                    </p>
+                  )}
                 </div>
 
                 <Button type="submit" disabled={loading}>
@@ -229,9 +332,93 @@ const Settings = () => {
                 <Bell className="h-5 w-5" />
                 Notification Preferences
               </CardTitle>
+              <p className="text-sm text-gray-600">Choose what notifications you want to receive</p>
             </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">Notification settings will be available soon...</p>
+            <CardContent className="space-y-6">
+              {/* Notification Types */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900">Notification Types</h3>
+                
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">Payment Reminders</p>
+                    <p className="text-sm text-gray-600">Get notified before payment due dates</p>
+                  </div>
+                  <Switch
+                    checked={notifications.paymentReminders}
+                    onCheckedChange={() => handleNotificationToggle('paymentReminders')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">Overdue Alerts</p>
+                    <p className="text-sm text-gray-600">Alerts for overdue payments</p>
+                  </div>
+                  <Switch
+                    checked={notifications.overdueAlerts}
+                    onCheckedChange={() => handleNotificationToggle('overdueAlerts')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">Loan Approvals</p>
+                    <p className="text-sm text-gray-600">Notifications for loan status changes</p>
+                  </div>
+                  <Switch
+                    checked={notifications.loanApprovals}
+                    onCheckedChange={() => handleNotificationToggle('loanApprovals')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">System Updates</p>
+                    <p className="text-sm text-gray-600">Updates about system maintenance and features</p>
+                  </div>
+                  <Switch
+                    checked={notifications.systemUpdates}
+                    onCheckedChange={() => handleNotificationToggle('systemUpdates')}
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Methods */}
+              <div className="space-y-4 pt-6 border-t">
+                <h3 className="font-semibold text-gray-900">Delivery Methods</h3>
+                
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">📧 Email Notifications</p>
+                    <p className="text-sm text-gray-600">Receive notifications via email</p>
+                  </div>
+                  <Switch
+                    checked={notifications.emailNotifications}
+                    onCheckedChange={() => handleNotificationToggle('emailNotifications')}
+                  />
+                </div>
+
+                
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium">🔔 Push Notifications</p>
+                    <p className="text-sm text-gray-600">Browser notifications (coming soon)</p>
+                  </div>
+                  <Switch
+                    checked={notifications.pushNotifications}
+                    onCheckedChange={() => handleNotificationToggle('pushNotifications')}
+                    disabled
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                <p className="text-sm text-blue-800">
+                  💡 <strong>Tip:</strong> Keep payment reminders and overdue alerts enabled to stay on top of your loan portfolio!
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

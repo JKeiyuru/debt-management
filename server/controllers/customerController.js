@@ -6,6 +6,19 @@ const { createAuditLog } = require('../utils/auditLogger');
 // @access  Private
 exports.createCustomer = async (req, res) => {
   try {
+    // Check if customer with same ID number already exists
+    const existingCustomer = await Customer.findOne({
+      'identification.idNumber': req.body.identification?.idNumber
+    });
+
+    if (existingCustomer) {
+      return res.status(400).json({
+        success: false,
+        message: `A customer with ID number ${req.body.identification.idNumber} already exists. Please use a different ID number.`,
+        field: 'idNumber'
+      });
+    }
+
     const customerData = {
       ...req.body,
       createdBy: req.user.id,
@@ -29,6 +42,28 @@ exports.createCustomer = async (req, res) => {
     });
   } catch (error) {
     console.error('Create customer error:', error);
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      
+      return res.status(400).json({
+        success: false,
+        message: `A customer with this ${field.split('.').pop()} already exists: ${value}`,
+        field: field.split('.').pop()
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', ')
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Error creating customer',
@@ -148,6 +183,23 @@ exports.updateCustomer = async (req, res) => {
       });
     }
 
+    // Check if trying to change ID number to one that already exists
+    if (req.body.identification?.idNumber && 
+        req.body.identification.idNumber !== customer.identification.idNumber) {
+      const existingCustomer = await Customer.findOne({
+        'identification.idNumber': req.body.identification.idNumber,
+        _id: { $ne: req.params.id }
+      });
+
+      if (existingCustomer) {
+        return res.status(400).json({
+          success: false,
+          message: `A customer with ID number ${req.body.identification.idNumber} already exists`,
+          field: 'idNumber'
+        });
+      }
+    }
+
     const oldValue = customer.toObject();
 
     customer = await Customer.findByIdAndUpdate(
@@ -176,6 +228,19 @@ exports.updateCustomer = async (req, res) => {
     });
   } catch (error) {
     console.error('Update customer error:', error);
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      
+      return res.status(400).json({
+        success: false,
+        message: `A customer with this ${field.split('.').pop()} already exists: ${value}`,
+        field: field.split('.').pop()
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Error updating customer',

@@ -39,10 +39,18 @@ const LoanCard = ({ loan, onClick, onQuickAction }) => {
     return (paid / loan.totalAmount) * 100;
   };
 
+  // Only show payment button for loans that can receive payments
+  const canReceivePayment = ['disbursed', 'active'].includes(loan.status);
+
   return (
     <Card 
       className="hover:shadow-xl transition-all duration-300 cursor-pointer group border-l-4 border-l-blue-500 overflow-hidden"
-      onClick={onClick}
+      onClick={(e) => {
+        // Only trigger onClick if not clicking on buttons
+        if (!e.target.closest('button')) {
+          onClick();
+        }
+      }}
     >
       <CardContent className="p-0">
         {/* Header Section */}
@@ -156,7 +164,7 @@ const LoanCard = ({ loan, onClick, onQuickAction }) => {
               <Eye className="h-4 w-4 mr-1" />
               View Details
             </Button>
-            {(loan.status === 'disbursed' || loan.status === 'active') && onQuickAction && (
+            {canReceivePayment && onQuickAction && (
               <Button 
                 size="sm" 
                 className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"

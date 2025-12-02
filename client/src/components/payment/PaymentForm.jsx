@@ -17,7 +17,8 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Info
 } from 'lucide-react';
 import { useToast } from '../ui/use-toast';
 
@@ -49,19 +50,67 @@ const PaymentForm = () => {
 
   const fetchActiveLoans = async () => {
     try {
-      const response = await api.get('/loans?status=disbursed,active&limit=100');
-      setLoans(response.data.data.loans);
+      console.log('🔍 Fetching active loans...');
+      
+      // Fetch loans with disbursed status
+      const disbursedResponse = await api.get('/loans', {
+        params: {
+          status: 'disbursed',
+          limit: 100
+        }
+      });
+      
+      // Fetch loans with active status
+      const activeResponse = await api.get('/loans', {
+        params: {
+          status: 'active',
+          limit: 100
+        }
+      });
+
+      // Combine both arrays
+      const allLoans = [
+        ...(disbursedResponse.data.data.loans || []),
+        ...(activeResponse.data.data.loans || [])
+      ];
+
+      // Remove duplicates by ID
+      const uniqueLoans = allLoans.filter((loan, index, self) =>
+        index === self.findIndex((l) => l._id === loan._id)
+      );
+
+      console.log('✅ Loaded loans:', uniqueLoans.length);
+      setLoans(uniqueLoans);
+
+      if (uniqueLoans.length === 0) {
+        toast({
+          title: 'No Active Loans 📋',
+          description: 'There are no active or disbursed loans available for payment recording. Loans must be disbursed before payments can be recorded.',
+        });
+      }
     } catch (error) {
-      console.error('Error fetching loans:', error);
+      console.error('❌ Error fetching loans:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load loans. Please try refreshing the page.',
+        variant: 'destructive'
+      });
     }
   };
 
   const fetchLoanDetails = async (loanId) => {
     try {
+      console.log('🔍 Fetching loan details for:', loanId);
       const response = await api.get(`/loans/${loanId}`);
       setSelectedLoan(response.data.data.loan);
+      console.log('✅ Loan details loaded');
     } catch (error) {
-      console.error('Error fetching loan:', error);
+      console.error('❌ Error fetching loan:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load loan details',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -74,8 +123,8 @@ const PaymentForm = () => {
     
     if (!formData.loan || !formData.amount) {
       toast({
-        title: 'Error',
-        description: 'Please fill in all required fields',
+        title: 'Missing Information ⚠️',
+        description: 'Please select a loan and enter payment amount',
         variant: 'destructive'
       });
       return;
@@ -83,7 +132,7 @@ const PaymentForm = () => {
 
     if (parseFloat(formData.amount) <= 0) {
       toast({
-        title: 'Error',
+        title: 'Invalid Amount ⚠️',
         description: 'Payment amount must be greater than zero',
         variant: 'destructive'
       });
@@ -93,18 +142,21 @@ const PaymentForm = () => {
     setLoading(true);
 
     try {
+      console.log('💰 Recording payment...');
       const response = await api.post('/payments', {
         ...formData,
         amount: parseFloat(formData.amount)
       });
 
+      console.log('✅ Payment recorded successfully');
       toast({
-        title: 'Success!',
+        title: 'Success! 🎉',
         description: `Payment recorded successfully. Receipt: ${response.data.data.payment.receiptNumber}`
       });
 
       navigate(`/payments/${response.data.data.payment._id}`);
     } catch (error) {
+      console.error('❌ Payment error:', error);
       toast({
         title: 'Error',
         description: error.response?.data?.message || 'Failed to record payment',
@@ -123,9 +175,18 @@ const PaymentForm = () => {
         </Button>
         <div>
           <h1 className="text-2xl font-bold">Record Payment</h1>
-          <p className="text-gray-600">Process loan repayment</p>
+          <p className="text-gray-600">Process loan repayment - early payments welcome! 💚</p>
         </div>
       </div>
+
+      {/* Info Alert */}
+      <Alert className="bg-blue-50 border-blue-200">
+        <Info className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Payment Flexibility:</strong> Customers can pay anytime - before, on, or after the due date. 
+          Partial payments and overpayments are both accepted!
+        </AlertDescription>
+      </Alert>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Loan Selection */}
@@ -145,17 +206,36 @@ const PaymentForm = () => {
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a loan..." />
+                  <SelectValue placeholder={loans.length > 0 ? "Choose a loan..." : "No active loans available"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {loans.map((loan) => (
-                    <SelectItem key={loan._id} value={loan._id}>
-                      {loan.loanNumber} - {loan.customer?.personalInfo?.firstName} {loan.customer?.personalInfo?.lastName} 
-                      (Balance: KES {loan.balances.totalBalance.toLocaleString()})
-                    </SelectItem>
-                  ))}
+                  {loans.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <p className="text-sm">No loans available for payment</p>
+                      <p className="text-xs mt-1">Loans must be disbursed first</p>
+                    </div>
+                  ) : (
+                    loans.map((loan) => (
+                      <SelectItem key={loan._id} value={loan._id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-medium">{loan.loanNumber}</span>
+                          <span className="text-gray-500 ml-4">
+                            {loan.customer?.personalInfo?.firstName} {loan.customer?.personalInfo?.lastName}
+                          </span>
+                          <span className="text-blue-600 ml-4 font-semibold">
+                            KES {loan.balances.totalBalance.toLocaleString()}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              {loans.length === 0 && (
+                <p className="text-xs text-orange-600 mt-1">
+                  💡 Tip: Make sure you have disbursed some loans first!
+                </p>
+              )}
             </div>
 
             {/* Loan Summary */}
@@ -212,8 +292,8 @@ const PaymentForm = () => {
                   <Input
                     id="amount"
                     type="number"
-                    step="0.01"
-                    placeholder="0.00"
+                    step="any"
+                    placeholder="Enter amount (e.g., 5000)"
                     value={formData.amount}
                     onChange={(e) => handleChange('amount', e.target.value)}
                     className="pl-10"
@@ -223,8 +303,10 @@ const PaymentForm = () => {
                 {selectedLoan && formData.amount && (
                   <p className="text-xs text-gray-500 mt-1">
                     {parseFloat(formData.amount) >= selectedLoan.balances.totalBalance 
-                      ? '✓ Full payment' 
-                      : `Remaining: KES ${(selectedLoan.balances.totalBalance - parseFloat(formData.amount)).toLocaleString()}`
+                      ? '✅ Full payment - Loan will be fully paid!' 
+                      : parseFloat(formData.amount) < selectedLoan.balances.totalBalance
+                      ? `📊 Partial payment - Remaining: KES ${(selectedLoan.balances.totalBalance - parseFloat(formData.amount)).toLocaleString()}`
+                      : `💰 Overpayment - Excess: KES ${(parseFloat(formData.amount) - selectedLoan.balances.totalBalance).toLocaleString()}`
                     }
                   </p>
                 )}
@@ -241,11 +323,11 @@ const PaymentForm = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="mobile_money">Mobile Money (M-Pesa)</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="cash">💵 Cash</SelectItem>
+                    <SelectItem value="bank_transfer">🏦 Bank Transfer</SelectItem>
+                    <SelectItem value="mobile_money">📱 Mobile Money (M-Pesa)</SelectItem>
+                    <SelectItem value="cheque">📝 Cheque</SelectItem>
+                    <SelectItem value="card">💳 Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -290,40 +372,40 @@ const PaymentForm = () => {
         </Card>
 
         {/* Payment Allocation Preview */}
-        {selectedLoan && formData.amount && (
+        {selectedLoan && formData.amount && parseFloat(formData.amount) > 0 && (
           <Card className="border-l-4 border-l-green-500">
             <CardHeader>
-              <CardTitle className="text-lg">Payment Allocation Preview</CardTitle>
+              <CardTitle className="text-lg">💡 Payment Allocation Preview</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Penalties:</span>
+                  <span className="text-gray-600">1. Penalties:</span>
                   <span className="font-semibold">
-                    KES {Math.min(parseFloat(formData.amount) || 0, selectedLoan.balances.penaltyBalance).toLocaleString()}
+                    KES {Math.min(parseFloat(formData.amount) || 0, selectedLoan.balances.penaltyBalance || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Fees:</span>
+                  <span className="text-gray-600">2. Fees:</span>
                   <span className="font-semibold">
-                    KES {Math.min(Math.max(0, (parseFloat(formData.amount) || 0) - selectedLoan.balances.penaltyBalance), selectedLoan.balances.feesBalance).toLocaleString()}
+                    KES {Math.min(Math.max(0, (parseFloat(formData.amount) || 0) - (selectedLoan.balances.penaltyBalance || 0)), selectedLoan.balances.feesBalance || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Interest:</span>
+                  <span className="text-gray-600">3. Interest:</span>
                   <span className="font-semibold text-orange-600">
-                    KES {Math.min(Math.max(0, (parseFloat(formData.amount) || 0) - selectedLoan.balances.penaltyBalance - selectedLoan.balances.feesBalance), selectedLoan.balances.interestBalance).toLocaleString()}
+                    KES {Math.min(Math.max(0, (parseFloat(formData.amount) || 0) - (selectedLoan.balances.penaltyBalance || 0) - (selectedLoan.balances.feesBalance || 0)), selectedLoan.balances.interestBalance || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
-                  <span className="text-gray-600">Principal:</span>
+                  <span className="text-gray-600">4. Principal:</span>
                   <span className="font-semibold text-blue-600">
-                    KES {Math.max(0, (parseFloat(formData.amount) || 0) - selectedLoan.balances.penaltyBalance - selectedLoan.balances.feesBalance - selectedLoan.balances.interestBalance).toLocaleString()}
+                    KES {Math.max(0, (parseFloat(formData.amount) || 0) - (selectedLoan.balances.penaltyBalance || 0) - (selectedLoan.balances.feesBalance || 0) - (selectedLoan.balances.interestBalance || 0)).toLocaleString()}
                   </span>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-3">
-                * Payment is allocated in order: Penalties → Fees → Interest → Principal
+                ℹ️ Payment is allocated in order: Penalties → Fees → Interest → Principal
               </p>
             </CardContent>
           </Card>
@@ -341,7 +423,7 @@ const PaymentForm = () => {
           </Button>
           <Button 
             type="submit" 
-            disabled={loading || !formData.loan || !formData.amount}
+            disabled={loading || !formData.loan || !formData.amount || loans.length === 0}
             className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
           >
             {loading ? (

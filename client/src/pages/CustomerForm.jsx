@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,8 +11,10 @@ import { useToast } from '../components/ui/use-toast';
 
 const CustomerForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams(); // Get customer ID from URL if editing
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(!!id); // Show loading if editing
   const [formData, setFormData] = useState({
     personalInfo: {
       firstName: '',
@@ -43,9 +45,74 @@ const CustomerForm = () => {
       status: 'employed',
       employer: '',
       occupation: '',
-      monthlyIncome: 0
-    }
+      monthlyIncome: ''
+    },
+    status: 'active' // Added customer status field
   });
+
+  // Fetch customer data if editing
+  useEffect(() => {
+    if (id) {
+      fetchCustomer();
+    }
+  }, [id]);
+
+  const fetchCustomer = async () => {
+    try {
+      const response = await api.get(`/customers/${id}`);
+      const customer = response.data.data.customer;
+      
+      setFormData({
+        personalInfo: {
+          firstName: customer.personalInfo.firstName || '',
+          lastName: customer.personalInfo.lastName || '',
+          middleName: customer.personalInfo.middleName || '',
+          dateOfBirth: customer.personalInfo.dateOfBirth 
+            ? new Date(customer.personalInfo.dateOfBirth).toISOString().split('T')[0] 
+            : '',
+          gender: customer.personalInfo.gender || 'male',
+          maritalStatus: customer.personalInfo.maritalStatus || 'single'
+        },
+        contactInfo: {
+          email: customer.contactInfo.email || '',
+          phone: customer.contactInfo.phone || '',
+          alternatePhone: customer.contactInfo.alternatePhone || '',
+          address: {
+            street: customer.contactInfo.address?.street || '',
+            city: customer.contactInfo.address?.city || '',
+            state: customer.contactInfo.address?.state || '',
+            postalCode: customer.contactInfo.address?.postalCode || ''
+          }
+        },
+        identification: {
+          idType: customer.identification.idType || 'national_id',
+          idNumber: customer.identification.idNumber || '',
+          idIssueDate: customer.identification.idIssueDate 
+            ? new Date(customer.identification.idIssueDate).toISOString().split('T')[0] 
+            : '',
+          idExpiryDate: customer.identification.idExpiryDate 
+            ? new Date(customer.identification.idExpiryDate).toISOString().split('T')[0] 
+            : ''
+        },
+        employment: {
+          status: customer.employment.status || 'employed',
+          employer: customer.employment.employer || '',
+          occupation: customer.employment.occupation || '',
+          monthlyIncome: customer.employment.monthlyIncome || ''
+        },
+        status: customer.status || 'active'
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load customer data',
+        variant: 'destructive'
+      });
+      navigate('/customers');
+    } finally {
+      setFetchingData(false);
+    }
+  };
 
   const handleChange = (section, field, value) => {
     setFormData(prev => ({
@@ -75,16 +142,27 @@ const CustomerForm = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/customers', formData);
-      toast({
-        title: 'Success',
-        description: 'Customer created successfully'
-      });
-      navigate(`/customers/${response.data.data.customer._id}`);
+      if (id) {
+        // Update existing customer
+        await api.put(`/customers/${id}`, formData);
+        toast({
+          title: 'Success! 🎉',
+          description: 'Customer updated successfully'
+        });
+        navigate(`/customers/${id}`);
+      } else {
+        // Create new customer
+        const response = await api.post('/customers', formData);
+        toast({
+          title: 'Success! 🎉',
+          description: 'Customer created successfully'
+        });
+        navigate(`/customers/${response.data.data.customer._id}`);
+      }
     } catch (error) {
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to create customer',
+        description: error.response?.data?.message || `Failed to ${id ? 'update' : 'create'} customer`,
         variant: 'destructive'
       });
     } finally {
@@ -92,13 +170,24 @@ const CustomerForm = () => {
     }
   };
 
+  if (fetchingData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading customer data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={() => navigate('/customers')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back
         </Button>
-        <h1 className="text-2xl font-bold">Add New Customer</h1>
+        <h1 className="text-2xl font-bold">{id ? 'Edit Customer' : 'Add New Customer'}</h1>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -177,6 +266,28 @@ const CustomerForm = () => {
                     <SelectItem value="widowed">Widowed</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="status">Customer Status *</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">✅ Active</SelectItem>
+                    <SelectItem value="inactive">⏸️ Inactive</SelectItem>
+                    <SelectItem value="blacklisted">🚫 Blacklisted</SelectItem>
+                    <SelectItem value="deceased">💀 Deceased</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.status === 'blacklisted' && '⚠️ This customer cannot receive new loans'}
+                  {formData.status === 'inactive' && 'ℹ️ This customer is temporarily inactive'}
+                  {formData.status === 'deceased' && '⚠️ No new transactions allowed'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -257,7 +368,9 @@ const CustomerForm = () => {
                   value={formData.identification.idNumber}
                   onChange={(e) => handleChange('identification', 'idNumber', e.target.value)}
                   required
+                  disabled={!!id} // Disable ID editing for existing customers
                 />
+                {id && <p className="text-xs text-gray-500 mt-1">ID number cannot be changed</p>}
               </div>
             </div>
           </CardContent>
@@ -291,8 +404,9 @@ const CustomerForm = () => {
                 <Input
                   id="monthlyIncome"
                   type="number"
+                  placeholder="Enter amount"
                   value={formData.employment.monthlyIncome}
-                  onChange={(e) => handleChange('employment', 'monthlyIncome', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleChange('employment', 'monthlyIncome', e.target.value ? parseFloat(e.target.value) : '')}
                 />
               </div>
             </div>
@@ -304,9 +418,9 @@ const CustomerForm = () => {
             Cancel
           </Button>
           <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : (
+            {loading ? (id ? 'Updating...' : 'Creating...') : (
               <>
-                <Save className="mr-2 h-4 w-4" /> Save Customer
+                <Save className="mr-2 h-4 w-4" /> {id ? 'Update Customer' : 'Save Customer'}
               </>
             )}
           </Button>

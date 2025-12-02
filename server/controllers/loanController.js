@@ -20,8 +20,48 @@ const generateLoanNumber = async () => {
 // @access  Private
 exports.createLoan = async (req, res) => {
   try {
+    console.log('📝 Creating loan with data:', req.body);
+
     const loanNumber = await generateLoanNumber();
     
+    // Validate required fields
+    if (!req.body.customer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer is required'
+      });
+    }
+
+    if (!req.body.principal || req.body.principal <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid principal amount is required'
+      });
+    }
+
+    // Check if customer exists and is active
+    const customer = await Customer.findById(req.body.customer);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    if (customer.status === 'blacklisted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot create loan for blacklisted customer'
+      });
+    }
+
+    if (customer.status === 'deceased') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot create loan for deceased customer'
+      });
+    }
+
     // Generate repayment schedule
     const schedule = generateRepaymentSchedule({
       principal: req.body.principal,
@@ -34,28 +74,61 @@ exports.createLoan = async (req, res) => {
       gracePeriod: req.body.gracePeriod || 0
     });
 
+    console.log('📊 Generated schedule:', schedule.length, 'installments');
+
     // Calculate totals
     const totalInterest = schedule.reduce((sum, item) => sum + item.interestDue, 0);
     const totalAmount = req.body.principal + totalInterest;
 
+    // Calculate total fees
+    const totalFees = 
+      (req.body.fees?.processingFee || 0) +
+      (req.body.fees?.insuranceFee || 0) +
+      (req.body.fees?.legalFee || 0) +
+      (req.body.fees?.otherFees || 0);
+
     const loanData = {
-      ...req.body,
       loanNumber,
+      customer: req.body.customer,
+      loanProduct: {
+        name: req.body.loanProduct?.name || 'Personal Loan',
+        type: req.body.loanProduct?.type || 'personal'
+      },
+      principal: req.body.principal,
+      interestRate: req.body.interestRate,
+      interestType: req.body.interestType || 'reducing_balance',
+      term: req.body.term,
+      repaymentFrequency: req.body.repaymentFrequency || 'monthly',
+      amortizationMethod: req.body.amortizationMethod || 'equal_installments',
+      gracePeriod: req.body.gracePeriod || 0,
+      fees: {
+        processingFee: req.body.fees?.processingFee || 0,
+        insuranceFee: req.body.fees?.insuranceFee || 0,
+        legalFee: req.body.fees?.legalFee || 0,
+        otherFees: req.body.fees?.otherFees || 0
+      },
+      totalFees,
       repaymentSchedule: schedule,
       totalInterest,
       totalAmount,
       balances: {
         principalBalance: req.body.principal,
         interestBalance: totalInterest,
-        feesBalance: req.body.totalFees || 0,
+        feesBalance: totalFees,
         penaltyBalance: 0,
-        totalBalance: totalAmount + (req.body.totalFees || 0)
+        totalBalance: totalAmount + totalFees
       },
       loanOfficer: req.body.loanOfficer || req.user.id,
-      createdBy: req.user.id
+      createdBy: req.user.id,
+      branch: req.user.branch || 'Main Branch',
+      status: 'pending'
     };
 
+    console.log('💾 Creating loan with data...');
+
     const loan = await Loan.create(loanData);
+
+    console.log('✅ Loan created:', loan.loanNumber);
 
     // Update customer credit info
     await Customer.findByIdAndUpdate(req.body.customer, {
@@ -70,17 +143,23 @@ exports.createLoan = async (req, res) => {
       details: `Loan created: ${loan.loanNumber}`
     });
 
+    // Populate customer data before returning
+    const populatedLoan = await Loan.findById(loan._id)
+      .populate('customer', 'personalInfo contactInfo')
+      .populate('loanOfficer', 'fullName email');
+
     res.status(201).json({
       success: true,
       message: 'Loan created successfully',
-      data: { loan }
+      data: { loan: populatedLoan }
     });
   } catch (error) {
-    console.error('Create loan error:', error);
+    console.error('❌ Create loan error:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating loan',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

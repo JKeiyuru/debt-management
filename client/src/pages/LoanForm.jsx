@@ -20,21 +20,21 @@ const LoanForm = () => {
       name: 'Personal Loan',
       type: 'personal'
     },
-    principal: 0,
-    interestRate: 15,
+    principal: '',
+    interestRate: '',
     interestType: 'reducing_balance',
     term: {
-      value: 12,
+      value: '',
       unit: 'months'
     },
     repaymentFrequency: 'monthly',
     amortizationMethod: 'equal_installments',
-    gracePeriod: 0,
+    gracePeriod: '',
     fees: {
-      processingFee: 0,
-      insuranceFee: 0,
-      legalFee: 0,
-      otherFees: 0
+      processingFee: '',
+      insuranceFee: '',
+      legalFee: '',
+      otherFees: ''
     }
   });
 
@@ -44,10 +44,15 @@ const LoanForm = () => {
 
   const fetchCustomers = async () => {
     try {
-      const response = await api.get('/customers?limit=100');
+      const response = await api.get('/customers?limit=100&status=active');
       setCustomers(response.data.data.customers);
     } catch (error) {
       console.error('Error fetching customers:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load customers',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -67,9 +72,27 @@ const LoanForm = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/loans', formData);
+      // Convert empty strings to numbers
+      const submitData = {
+        ...formData,
+        principal: parseFloat(formData.principal) || 0,
+        interestRate: parseFloat(formData.interestRate) || 0,
+        term: {
+          ...formData.term,
+          value: parseInt(formData.term.value) || 1
+        },
+        gracePeriod: parseInt(formData.gracePeriod) || 0,
+        fees: {
+          processingFee: parseFloat(formData.fees.processingFee) || 0,
+          insuranceFee: parseFloat(formData.fees.insuranceFee) || 0,
+          legalFee: parseFloat(formData.fees.legalFee) || 0,
+          otherFees: parseFloat(formData.fees.otherFees) || 0
+        }
+      };
+
+      const response = await api.post('/loans', submitData);
       toast({
-        title: 'Success',
+        title: 'Success! 🎉',
         description: 'Loan created successfully'
       });
       navigate(`/loans/${response.data.data.loan._id}`);
@@ -162,8 +185,11 @@ const LoanForm = () => {
                 <Input
                   id="principal"
                   type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Enter amount (e.g., 50000)"
                   value={formData.principal}
-                  onChange={(e) => handleChange('principal', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleChange('principal', e.target.value)}
                   required
                 />
               </div>
@@ -172,9 +198,11 @@ const LoanForm = () => {
                 <Input
                   id="interestRate"
                   type="number"
-                  step="0.01"
+                  min="0"
+                  step="any"
+                  placeholder="Enter rate (e.g., 15.5)"
                   value={formData.interestRate}
-                  onChange={(e) => handleChange('interestRate', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleChange('interestRate', e.target.value)}
                   required
                 />
               </div>
@@ -199,8 +227,11 @@ const LoanForm = () => {
                 <Input
                   id="termValue"
                   type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Enter term (e.g., 12)"
                   value={formData.term.value}
-                  onChange={(e) => handleNestedChange('term', 'value', parseInt(e.target.value) || 1)}
+                  onChange={(e) => handleNestedChange('term', 'value', e.target.value)}
                   required
                 />
               </div>
@@ -244,7 +275,7 @@ const LoanForm = () => {
         {/* Fees */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Fees</CardTitle>
+            <CardTitle>Fees (Optional)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -253,8 +284,11 @@ const LoanForm = () => {
                 <Input
                   id="processingFee"
                   type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Enter amount (e.g., 2500)"
                   value={formData.fees.processingFee}
-                  onChange={(e) => handleNestedChange('fees', 'processingFee', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleNestedChange('fees', 'processingFee', e.target.value)}
                 />
               </div>
               <div>
@@ -262,8 +296,11 @@ const LoanForm = () => {
                 <Input
                   id="insuranceFee"
                   type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Enter amount (e.g., 1000)"
                   value={formData.fees.insuranceFee}
-                  onChange={(e) => handleNestedChange('fees', 'insuranceFee', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleNestedChange('fees', 'insuranceFee', e.target.value)}
                 />
               </div>
             </div>

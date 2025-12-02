@@ -280,22 +280,7 @@ loanSchema.index({ 'delinquency.status': 1 });
 loanSchema.index({ disbursementDate: -1 });
 loanSchema.index({ maturityDate: 1 });
 
-// Pre-save middleware to calculate totals
-loanSchema.pre('save', function(next) {
-  // Calculate total fees
-  this.totalFees = 
-    (this.fees.processingFee || 0) + 
-    (this.fees.insuranceFee || 0) + 
-    (this.fees.legalFee || 0) + 
-    (this.fees.otherFees || 0);
-
-  // Initialize balances if loan is new
-  if (this.isNew && this.status === 'pending') {
-    this.balances.principalBalance = this.principal;
-    this.balances.feesBalance = this.totalFees;
-  }
-
-  next();
-});
+// REMOVED THE PROBLEMATIC PRE-SAVE MIDDLEWARE
+// All calculations are done in loanController.js
 
 module.exports = mongoose.model('Loan', loanSchema);

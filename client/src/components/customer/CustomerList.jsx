@@ -16,6 +16,7 @@ const CustomerList = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({
@@ -26,10 +27,25 @@ const CustomerList = () => {
   
   const navigate = useNavigate();
 
+  // Debounce search input - wait 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPagination(prev => ({ ...prev, currentPage: 1 })); // Reset to page 1 on new search
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch customers when debounced search changes
   useEffect(() => {
     fetchCustomers();
+  }, [debouncedSearch, status, pagination.currentPage]);
+
+  // Fetch stats once on mount
+  useEffect(() => {
     fetchStats();
-  }, [search, status, pagination.currentPage]);
+  }, []);
 
   const fetchCustomers = async () => {
     try {
@@ -37,7 +53,7 @@ const CustomerList = () => {
       const params = {
         page: pagination.currentPage,
         limit: 12,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: status !== 'all' ? status : undefined
       };
 
@@ -66,7 +82,7 @@ const CustomerList = () => {
 
   const handleSearchChange = (e) => {
     setSearch(e.target.value);
-    setPagination({ ...pagination, currentPage: 1 });
+    // Don't call fetchCustomers here - let the debounce effect handle it
   };
 
   const getStatusColor = (status) => {
@@ -77,17 +93,6 @@ const CustomerList = () => {
     };
     return colors[status] || colors.active;
   };
-
-  if (loading && customers.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading customers...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -156,6 +161,11 @@ const CustomerList = () => {
                 onChange={handleSearchChange}
                 className="pl-10"
               />
+              {search && search !== debouncedSearch && (
+                <div className="absolute right-3 top-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                </div>
+              )}
             </div>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger className="w-full md:w-48">
@@ -172,11 +182,23 @@ const CustomerList = () => {
           </div>
 
           {/* Customer Grid */}
-          {customers.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading customers...</p>
+              </div>
+            </div>
+          ) : customers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No customers found</h3>
-              <p className="text-gray-600 mb-4">Get started by adding your first customer</p>
+              <p className="text-gray-600 mb-4">
+                {search || status !== 'all' 
+                  ? 'Try adjusting your search or filters'
+                  : 'Get started by adding your first customer'
+                }
+              </p>
               <Button onClick={() => navigate('/customers/new')}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Customer
