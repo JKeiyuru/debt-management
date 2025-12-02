@@ -1,0 +1,6 @@
+/service-worker.js
+  Cache-Control: max-age=0, no-cache, no-store, must-revalidate
+
+/manifest.json
+  Content-Type: application/manifest+json
+  Cache-Control: max-age=3600
