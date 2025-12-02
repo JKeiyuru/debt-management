@@ -124,12 +124,12 @@ const LoginForm = () => {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-500">
+          {/* <div className="mt-6 text-center text-sm text-gray-500">
             <p>Demo Credentials:</p>
             <p className="font-mono text-xs mt-1">
-              admin@demo.com / admin123
+              admin@demo.com / @admin123
             </p>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>
