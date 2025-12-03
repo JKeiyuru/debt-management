@@ -28,5 +28,5 @@ dist-ssr
 .env.local
 
 # PWA assets
-public/icons/*.png
-!public/icons/.gitkeep
+# public/icons/*.png
+# !public/icons/.gitkeep
