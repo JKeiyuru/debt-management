@@ -91,11 +91,33 @@ const LoanForm = () => {
       };
 
       const response = await api.post('/loans', submitData);
+      
       toast({
         title: 'Success! 🎉',
         description: 'Loan created successfully'
       });
-      navigate(`/loans/${response.data.data.loan._id}`);
+
+      // 🆕 CHECK IF CONTRACT WAS GENERATED
+      const loan = response.data.data.loan;
+      const contract = response.data.data.contract;
+
+      if (contract && contract.id) {
+        // Redirect to contract review page
+        toast({
+          title: 'Contract Generated',
+          description: 'Review and print the loan contract',
+          duration: 3000
+        });
+        
+        // Navigate to contract review after a short delay
+        setTimeout(() => {
+          navigate(`/contracts/${contract.id}?loanId=${loan._id}`);
+        }, 1500);
+      } else {
+        // No contract generated, go to loan details
+        navigate(`/loans/${loan._id}`);
+      }
+      
     } catch (error) {
       toast({
         title: 'Error',

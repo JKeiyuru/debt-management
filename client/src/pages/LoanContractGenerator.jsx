@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Download, Send, Eye, Edit, Save, Plus, Trash2, Printer } from 'lucide-react';
 
 const LoanContractGenerator = () => {
+  const { id } = useParams(); // Contract ID from URL
+  const [searchParams] = useSearchParams();
+  const loanId = searchParams.get('loanId'); // Optional loan ID
+
   const [contractData, setContractData] = useState({
     // Business Info
     businessName: 'Your Debt Management Company',
@@ -69,6 +75,105 @@ const LoanContractGenerator = () => {
   });
 
   const [previewMode, setPreviewMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [contractId, setContractId] = useState(id || null);
+
+  // 🆕 Load existing contract on mount
+  useEffect(() => {
+    if (id) {
+      loadContract(id);
+    } else if (loanId) {
+      loadContractByLoan(loanId);
+    }
+  }, [id, loanId]);
+
+  const loadContract = async (contractId) => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/loan-contracts/${contractId}`);
+      const contract = response.data.data.contract;
+      
+      // Populate form with contract data
+      setContractData({
+        businessName: contract.businessInfo?.name || '',
+        businessLogo: contract.businessInfo?.logo || '',
+        businessAddress: contract.businessInfo?.address || '',
+        businessPhone: contract.businessInfo?.phone || '',
+        businessEmail: contract.businessInfo?.email || '',
+        
+        // Populate borrower info from customer
+        borrowerName: `${contract.customer?.personalInfo?.firstName || ''} ${contract.customer?.personalInfo?.lastName || ''}`,
+        borrowerIdNumber: contract.customer?.identification?.idNumber || '',
+        borrowerPhone: contract.customer?.contactInfo?.phone || '',
+        borrowerEmail: contract.customer?.contactInfo?.email || '',
+        borrowerAddress: contract.customer?.contactInfo?.address?.street || '',
+        borrowerKraPin: '',
+        nextOfKinName: contract.customer?.nextOfKin?.name || '',
+        nextOfKinRelationship: contract.customer?.nextOfKin?.relationship || '',
+        nextOfKinPhone: contract.customer?.nextOfKin?.phone || '',
+        
+        // Loan details from contract
+        loanAmount: contract.terms?.loanAmount || 0,
+        loanType: contract.loan?.loanProduct?.name || '',
+        interestRate: contract.terms?.interestRate || 0,
+        interestType: contract.terms?.interestType || 'reducing_balance',
+        processingFee: contract.fees?.processingFee || 0,
+        legalFee: contract.fees?.legalFee || 0,
+        insuranceFee: contract.fees?.insuranceFee || 0,
+        otherFees: contract.fees?.otherFees || 0,
+        disbursementMethod: 'Bank Transfer',
+        
+        // Repayment terms
+        repaymentPeriod: contract.terms?.repaymentPeriod || '',
+        repaymentSchedule: contract.terms?.repaymentSchedule || 'monthly',
+        installmentAmount: contract.terms?.installmentAmount || 0,
+        firstInstallmentDate: contract.terms?.firstInstallmentDate ? 
+          new Date(contract.terms.firstInstallmentDate).toISOString().split('T')[0] : '',
+        finalInstallmentDate: contract.terms?.finalInstallmentDate ? 
+          new Date(contract.terms.finalInstallmentDate).toISOString().split('T')[0] : '',
+        penaltyRate: contract.terms?.penaltyRate || '2% per month',
+        gracePeriod: contract.terms?.gracePeriod || '3 days',
+        
+        // Collateral
+        hasCollateral: contract.collateral?.hasCollateral || false,
+        collateralType: contract.collateral?.type || '',
+        collateralValue: contract.collateral?.value || 0,
+        collateralIdentifier: contract.collateral?.identifier || '',
+        collateralLocation: contract.collateral?.location || '',
+        
+        // Terms
+        customClauses: contract.clauses || [],
+        defaultDefinition: contract.defaultDefinition || '',
+        defaultAction: contract.defaultAction || '',
+        dataConsentText: contract.dataConsentText || ''
+      });
+      
+      setContractId(contract._id);
+      
+    } catch (error) {
+      console.error('Error loading contract:', error);
+      alert('Error loading contract');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadContractByLoan = async (loanId) => {
+    try {
+      setLoading(true);
+      // Find contract by loan ID
+      const response = await api.get(`/loan-contracts?loanId=${loanId}`);
+      if (response.data.data.contracts.length > 0) {
+        const contract = response.data.data.contracts[0];
+        setContractId(contract._id);
+        loadContract(contract._id);
+      }
+    } catch (error) {
+      console.error('Error finding contract:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const calculateTotals = () => {
     const totalFees = 
@@ -137,6 +242,18 @@ const LoanContractGenerator = () => {
     }
   };
 
+  // Add loading state to the component
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading contract...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -144,6 +261,11 @@ const LoanContractGenerator = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Loan Contract Generator</h1>
           <p className="text-gray-600">Create and customize loan agreements</p>
+          {contractId && (
+            <p className="text-sm text-blue-600 mt-1">
+              Editing contract: {contractId.substring(0, 8)}...
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={loadTemplate}>
