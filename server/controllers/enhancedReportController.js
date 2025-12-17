@@ -625,11 +625,3 @@ exports.getLoanForecasting = async (req, res) => {
   }
 };
 
-module.exports = {
-  getPARReport,
-  getLoanAgingReport,
-  getExpectedVsActual,
-  getCollectorPerformance,
-  getRevenueBreakdown,
-  getLoanForecasting
-};

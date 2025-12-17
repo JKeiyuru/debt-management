@@ -32,6 +32,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import LoanContractGenerator from './pages/LoanContractGenerator';
+import EnhancedReports from './pages/EnhancedReports';
 
 function AppContent() {
   const { isOnline, needsUpdate, updateApp } = usePWA();

@@ -336,12 +336,3 @@ exports.generatePDF = async (req, res) => {
   }
 };
 
-module.exports = {
-  createLoanContract,
-  getAllContracts,
-  getContract,
-  updateContract,
-  sendContract,
-  signContract,
-  generatePDF
-};
