@@ -10,6 +10,8 @@ const customerRoutes = require('./routes/customers');
 const loanRoutes = require('./routes/loans');
 const paymentRoutes = require('./routes/payments');
 const reportRoutes = require('./routes/reports');
+const loanContractRoutes = require('./routes/loanContracts');
+const enhancedReportRoutes = require('./routes/enhancedReports');
 
 const app = express();
 
@@ -30,6 +32,8 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/loan-contracts', loanContractRoutes);
+app.use('/api/reports/enhanced', enhancedReportRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

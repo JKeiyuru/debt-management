@@ -31,6 +31,7 @@ import PaymentReceiptPage from './pages/PaymentReceipt';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import LoanContractGenerator from './pages/LoanContractGenerator';
 
 function AppContent() {
   const { isOnline, needsUpdate, updateApp } = usePWA();
@@ -64,6 +65,9 @@ function AppContent() {
           <Route path="loans" element={<Loans />} />
           <Route path="loans/new" element={<LoanForm />} />
           <Route path="loans/:id" element={<LoanDetails />} />
+
+          <Route path="contracts/new" element={<LoanContractGenerator />} />
+<Route path="contracts/:id" element={<LoanContractGenerator />} />
           
           {/* Payment routes */}
           <Route path="payments" element={<Payments />} />
@@ -72,7 +76,7 @@ function AppContent() {
           
           {/* Report routes */}
           <Route path="reports" element={<Reports />} />
-          
+          <Route path="reports/enhanced" element={<EnhancedReports />} />
           {/* Settings */}
           <Route path="settings" element={<Settings />} />
         </Route>
