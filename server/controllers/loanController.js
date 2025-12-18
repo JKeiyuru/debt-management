@@ -1,5 +1,7 @@
+// server/controllers/loanController.js - COMPLETE WITH CONTRACT GENERATION
 const Loan = require('../models/Loan');
 const Customer = require('../models/Customer');
+const LoanContract = require('../models/LoanContract'); // ✨ ADD THIS
 const { createAuditLog } = require('../utils/auditLogger');
 const { generateRepaymentSchedule, calculateTotalInterest, updateDelinquencyStatus } = require('../utils/loanCalculator');
 
@@ -15,10 +17,10 @@ const generateLoanNumber = async () => {
   return `LN${year}${month}${sequence}`;
 };
 
-// Add this function after the generateLoanNumber function
+// ✨ CREATE DEFAULT CONTRACT FUNCTION
 const createDefaultContract = async (loan, userId) => {
   try {
-    const LoanContract = require('../models/LoanContract');
+    console.log('📝 Creating contract for loan:', loan.loanNumber);
     
     // Calculate totals
     const totalFees = 
@@ -85,6 +87,7 @@ const createDefaultContract = async (loan, userId) => {
     return contract;
   } catch (error) {
     console.error('❌ Error creating default contract:', error);
+    console.error('❌ Error details:', error.message);
     // Don't throw error - contract generation failure shouldn't block loan creation
     return null;
   }
@@ -219,7 +222,14 @@ exports.createLoan = async (req, res) => {
     });
 
     // 🆕 AUTO-GENERATE CONTRACT
+    console.log('📄 Generating contract...');
     const contract = await createDefaultContract(loan, req.user.id);
+
+    if (contract) {
+      console.log('✅ Contract generated successfully:', contract.contractNumber);
+    } else {
+      console.log('⚠️ Contract generation failed or skipped');
+    }
 
     // Populate customer data before returning
     const populatedLoan = await Loan.findById(loan._id)
