@@ -90,6 +90,10 @@ const LoanDetails = () => {
     }
   };
 
+  const handleGenerateContract = () => {
+    navigate(`/contracts/generate/${id}`);
+  };
+
   if (loading) return <div className="text-center py-12">Loading...</div>;
   if (!loan) return <div className="text-center py-12">Loan not found</div>;
 
@@ -108,6 +112,13 @@ const LoanDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Generate Contract Button - Only show for approved loans without contract */}
+          {loan.status === 'approved' && !contract && (
+            <Button onClick={handleGenerateContract}>
+              <FileText className="mr-2 h-4 w-4" />
+              Generate Contract
+            </Button>
+          )}
           {contract && (
             <Button variant="outline" onClick={handleViewContract}>
               <Eye className="mr-2 h-4 w-4" />
@@ -164,7 +175,21 @@ const LoanDetails = () => {
         </Card>
       )}
 
-      {loan.status === 'approved' && (
+      {loan.status === 'approved' && !contract && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-gray-600">Generate a contract before disbursing the loan:</p>
+              <Button onClick={handleGenerateContract} className="bg-blue-600 hover:bg-blue-700">
+                <FileText className="mr-2 h-4 w-4" />
+                Generate Loan Contract
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {loan.status === 'approved' && contract && (
         <Card>
           <CardContent className="pt-6">
             <Button onClick={handleDisburse} className="bg-blue-600 hover:bg-blue-700">

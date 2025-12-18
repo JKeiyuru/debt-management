@@ -5,44 +5,31 @@ const Loan = require('../models/Loan');
 const Customer = require('../models/Customer');
 const { createAuditLog } = require('../utils/auditLogger');
 
-// @desc    Create loan contract
+// @desc    Create loan contract manually (called when user clicks "Generate Contract")
 // @route   POST /api/loan-contracts
 // @access  Private
 exports.createLoanContract = async (req, res) => {
   try {
-    const {
-      loanId,
-      businessInfo,
-      terms,
-      fees,
-      collateral,
-      clauses,
-      defaultDefinition,
-      defaultAction,
-      dataConsentText
-    } = req.body;
-
-    // Verify loan exists
+    const { loanId, contractData } = req.body;
+    
     const loan = await Loan.findById(loanId).populate('customer');
     if (!loan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Loan not found'
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Loan not found' 
       });
     }
 
-    // Create contract
     const contract = await LoanContract.create({
       loan: loanId,
       customer: loan.customer._id,
-      businessInfo,
-      terms,
-      fees,
-      collateral,
-      clauses,
-      defaultDefinition,
-      defaultAction,
-      dataConsentText,
+      businessInfo: contractData.businessInfo,
+      terms: contractData.terms,
+      fees: contractData.fees,
+      collateral: contractData.collateral,
+      clauses: contractData.clauses,
+      defaultDefinition: contractData.defaultDefinition,
+      defaultAction: contractData.defaultAction,
       createdBy: req.user.id,
       status: 'draft'
     });
@@ -62,10 +49,10 @@ exports.createLoanContract = async (req, res) => {
     });
   } catch (error) {
     console.error('Create contract error:', error);
-    res.status(500).json({
-      success: false,
+    res.status(500).json({ 
+      success: false, 
       message: 'Error creating contract',
-      error: error.message
+      error: error.message 
     });
   }
 };
@@ -335,4 +322,3 @@ exports.generatePDF = async (req, res) => {
     });
   }
 };
-

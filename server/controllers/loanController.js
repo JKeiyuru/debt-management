@@ -1,7 +1,6 @@
 // server/controllers/loanController.js - COMPLETE WITH CONTRACT GENERATION
 const Loan = require('../models/Loan');
 const Customer = require('../models/Customer');
-const LoanContract = require('../models/LoanContract'); // ✨ ADD THIS
 const { createAuditLog } = require('../utils/auditLogger');
 const { generateRepaymentSchedule, calculateTotalInterest, updateDelinquencyStatus } = require('../utils/loanCalculator');
 
@@ -15,82 +14,6 @@ const generateLoanNumber = async () => {
   const sequence = (count + 1).toString().padStart(5, '0');
   
   return `LN${year}${month}${sequence}`;
-};
-
-// ✨ CREATE DEFAULT CONTRACT FUNCTION
-const createDefaultContract = async (loan, userId) => {
-  try {
-    console.log('📝 Creating contract for loan:', loan.loanNumber);
-    
-    // Calculate totals
-    const totalFees = 
-      (loan.fees?.processingFee || 0) +
-      (loan.fees?.insuranceFee || 0) +
-      (loan.fees?.legalFee || 0) +
-      (loan.fees?.otherFees || 0);
-    
-    const disbursedAmount = loan.principal - totalFees;
-    
-    // Create contract with loan data
-    const contract = await LoanContract.create({
-      loan: loan._id,
-      customer: loan.customer,
-      businessInfo: {
-        name: process.env.BUSINESS_NAME || 'Your Debt Management Company',
-        logo: process.env.BUSINESS_LOGO || '',
-        address: process.env.BUSINESS_ADDRESS || 'P.O. Box 12345, Nairobi, Kenya',
-        phone: process.env.BUSINESS_PHONE || '+254 700 000 000',
-        email: process.env.BUSINESS_EMAIL || 'info@yourdebtsystem.com'
-      },
-      terms: {
-        loanAmount: loan.principal,
-        interestRate: loan.interestRate,
-        interestType: loan.interestType,
-        totalAmount: loan.totalAmount,
-        disbursedAmount: disbursedAmount,
-        repaymentPeriod: `${loan.term.value} ${loan.term.unit}`,
-        repaymentSchedule: loan.repaymentFrequency,
-        installmentAmount: loan.repaymentSchedule[0]?.totalDue || 0,
-        firstInstallmentDate: loan.repaymentSchedule[0]?.dueDate,
-        finalInstallmentDate: loan.repaymentSchedule[loan.repaymentSchedule.length - 1]?.dueDate,
-        penaltyRate: loan.penaltyRules?.enabled ? `${loan.penaltyRules.rate}% per month` : 'None',
-        gracePeriod: `${loan.gracePeriod || 0} days`
-      },
-      fees: {
-        processingFee: loan.fees?.processingFee || 0,
-        legalFee: loan.fees?.legalFee || 0,
-        insuranceFee: loan.fees?.insuranceFee || 0,
-        otherFees: loan.fees?.otherFees || 0,
-        total: totalFees
-      },
-      collateral: {
-        hasCollateral: loan.collateral && loan.collateral.length > 0,
-        type: loan.collateral?.[0]?.type || '',
-        value: loan.collateral?.[0]?.value || 0,
-        identifier: loan.collateral?.[0]?.description || '',
-        location: ''
-      },
-      clauses: [
-        'The borrower must repay all installments on the due dates specified in the repayment schedule.',
-        'The borrower must keep their contact information active and notify the lender of any changes.',
-        'Late payment will attract a penalty as specified in the terms.',
-        'The lender reserves the right to recover collateral in case of default.'
-      ],
-      defaultDefinition: 'Failure to pay two consecutive installments constitutes default.',
-      defaultAction: 'The lender will initiate debt recovery procedures and may seize collateral.',
-      dataConsentText: 'The borrower consents to the storage and processing of their personal data for loan management purposes.',
-      createdBy: userId,
-      status: 'draft'
-    });
-
-    console.log('✅ Contract auto-generated:', contract.contractNumber);
-    return contract;
-  } catch (error) {
-    console.error('❌ Error creating default contract:', error);
-    console.error('❌ Error details:', error.message);
-    // Don't throw error - contract generation failure shouldn't block loan creation
-    return null;
-  }
 };
 
 // @desc    Create new loan
@@ -221,16 +144,6 @@ exports.createLoan = async (req, res) => {
       details: `Loan created: ${loan.loanNumber}`
     });
 
-    // 🆕 AUTO-GENERATE CONTRACT
-    console.log('📄 Generating contract...');
-    const contract = await createDefaultContract(loan, req.user.id);
-
-    if (contract) {
-      console.log('✅ Contract generated successfully:', contract.contractNumber);
-    } else {
-      console.log('⚠️ Contract generation failed or skipped');
-    }
-
     // Populate customer data before returning
     const populatedLoan = await Loan.findById(loan._id)
       .populate('customer', 'personalInfo contactInfo')
@@ -239,13 +152,7 @@ exports.createLoan = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Loan created successfully',
-      data: { 
-        loan: populatedLoan,
-        contract: contract ? { 
-          id: contract._id, 
-          contractNumber: contract.contractNumber 
-        } : null
-      }
+      data: { loan: populatedLoan }
     });
   } catch (error) {
     console.error('❌ Create loan error:', error);

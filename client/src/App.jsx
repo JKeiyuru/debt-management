@@ -69,6 +69,8 @@ function AppContent() {
 
           <Route path="contracts/new" element={<LoanContractGenerator />} />
 <Route path="contracts/:id" element={<LoanContractGenerator />} />
+{/* // Add this route */}
+<Route path="contracts/generate/:loanId" element={<LoanContractGenerator />} />
           
           {/* Payment routes */}
           <Route path="payments" element={<Payments />} />

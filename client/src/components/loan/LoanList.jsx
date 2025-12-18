@@ -12,7 +12,8 @@ import {
   Briefcase,
   TrendingUp,
   AlertCircle,
-  Clock
+  Clock,
+  FileText
 } from 'lucide-react';
 import LoanCard from './LoanCard';
 
@@ -75,6 +76,10 @@ const LoanList = () => {
 
   const handleQuickPayment = (loan) => {
     navigate(`/payments/new?loanId=${loan._id}`);
+  };
+
+  const handleGenerateContract = (loan) => {
+    navigate(`/contracts/generate/${loan._id}`);
   };
 
   if (loading && loans.length === 0) {
@@ -205,6 +210,23 @@ const LoanList = () => {
                     loan={loan}
                     onClick={() => navigate(`/loans/${loan._id}`)}
                     onQuickAction={handleQuickPayment}
+                    // Add additional quick actions prop
+                    additionalActions={
+                      loan.status === 'approved' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGenerateContract(loan);
+                          }}
+                          className="mt-2 w-full"
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Generate Contract
+                        </Button>
+                      ) : null
+                    }
                   />
                 ))}
               </div>
