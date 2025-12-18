@@ -1,3 +1,4 @@
+// client/src/pages/LoanDetails.jsx - UPDATED WITH DOCUMENTS TAB
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
@@ -6,7 +7,8 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import RepaymentSchedule from '../components/loan/RepaymentSchedule';
-import { ArrowLeft, CheckCircle, XCircle, Calendar, FileText } from 'lucide-react';
+import DocumentManager from '../components/document/DocumentManager';
+import { ArrowLeft, CheckCircle, XCircle, Calendar, FileText, Eye } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 
 const LoanDetails = () => {
@@ -14,10 +16,12 @@ const LoanDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loan, setLoan] = useState(null);
+  const [contract, setContract] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchLoan();
+    fetchContract();
   }, [id]);
 
   const fetchLoan = async () => {
@@ -28,6 +32,17 @@ const LoanDetails = () => {
       console.error('Error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchContract = async () => {
+    try {
+      const response = await api.get(`/loan-contracts?loanId=${id}`);
+      if (response.data.data.contracts.length > 0) {
+        setContract(response.data.data.contracts[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching contract:', error);
     }
   };
 
@@ -69,6 +84,12 @@ const LoanDetails = () => {
     }
   };
 
+  const handleViewContract = () => {
+    if (contract) {
+      navigate(`/contracts/${contract._id}?loanId=${id}`);
+    }
+  };
+
   if (loading) return <div className="text-center py-12">Loading...</div>;
   if (!loan) return <div className="text-center py-12">Loan not found</div>;
 
@@ -86,15 +107,46 @@ const LoanDetails = () => {
             </p>
           </div>
         </div>
-        <Badge className={
-          loan.status === 'approved' ? 'bg-green-100 text-green-800' :
-          loan.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-          loan.status === 'disbursed' ? 'bg-blue-100 text-blue-800' :
-          'bg-gray-100 text-gray-800'
-        }>
-          {loan.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {contract && (
+            <Button variant="outline" onClick={handleViewContract}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Contract
+            </Button>
+          )}
+          <Badge className={
+            loan.status === 'approved' ? 'bg-green-100 text-green-800' :
+            loan.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+            loan.status === 'disbursed' ? 'bg-blue-100 text-blue-800' :
+            'bg-gray-100 text-gray-800'
+          }>
+            {loan.status}
+          </Badge>
+        </div>
       </div>
+
+      {/* Contract Alert */}
+      {contract && (
+        <Card className="border-l-4 border-l-blue-500 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="h-8 w-8 text-blue-600" />
+                <div>
+                  <h3 className="font-semibold text-blue-900">Loan Contract Available</h3>
+                  <p className="text-sm text-blue-700">
+                    Contract {contract.contractNumber} • {contract.status}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={handleViewContract}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Contract
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Action Buttons */}
       {loan.status === 'pending' && (
@@ -152,12 +204,19 @@ const LoanDetails = () => {
         </Card>
       </div>
 
-      {/* Loan Details */}
+      {/* Loan Details Tabs */}
       <Tabs defaultValue="details" className="space-y-6">
         <TabsList>
           <TabsTrigger value="details">Loan Details</TabsTrigger>
           <TabsTrigger value="schedule">Repayment Schedule</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="documents">
+            Documents
+            {contract && (
+              <Badge className="ml-2 bg-blue-500 text-white">
+                {contract ? '1+' : '0'}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="details">
@@ -203,17 +262,7 @@ const LoanDetails = () => {
         </TabsContent>
 
         <TabsContent value="documents">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Loan Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">Document management coming soon...</p>
-            </CardContent>
-          </Card>
+          <DocumentManager entityType="Loan" entityId={id} />
         </TabsContent>
       </Tabs>
     </div>

@@ -191,14 +191,9 @@ const loanSchema = new mongoose.Schema({
     documents: [String]
   }],
   documents: [{
-    name: String,
-    type: String,
-    url: String,
-    uploadedDate: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Document'
+}],
   approvals: [{
     approvedBy: {
       type: mongoose.Schema.Types.ObjectId,

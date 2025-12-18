@@ -1,3 +1,4 @@
+// server/server.js - UPDATED WITH DOCUMENTS ROUTE
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -12,6 +13,7 @@ const paymentRoutes = require('./routes/payments');
 const reportRoutes = require('./routes/reports');
 const loanContractRoutes = require('./routes/loanContracts');
 const enhancedReportRoutes = require('./routes/enhancedReports');
+const documentRoutes = require('./routes/documents'); // ✨ NEW
 
 const app = express();
 
@@ -34,6 +36,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/loan-contracts', loanContractRoutes);
 app.use('/api/reports/enhanced', enhancedReportRoutes);
+app.use('/api/documents', documentRoutes); // ✨ NEW
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -52,4 +55,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📁 Document management: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Enabled' : '❌ Disabled (Add Cloudinary credentials)'}`);
 });

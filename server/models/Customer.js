@@ -117,14 +117,9 @@ const customerSchema = new mongoose.Schema({
     }
   }],
   documents: [{
-    name: String,
-    type: String,
-    url: String,
-    uploadedDate: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Document'
+}],
   creditInfo: {
     creditScore: {
       type: Number,
